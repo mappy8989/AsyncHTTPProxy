@@ -5,7 +5,7 @@
             "label": "GCC: Build Debug app",
             "type": "shell",
             "command": [
-                "mkdir ${workspaceFolder}/build ; ",
+                "mkdir -p ${workspaceFolder}/build ; ",
                 "cd ${workspaceFolder}/build &&",
                 "make -j4"
             ],
