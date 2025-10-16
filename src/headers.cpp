@@ -29,7 +29,7 @@ std::pair<std::string, std::string> findHostPort(std::string_view req) {
         size_t port_separ_pos = host_port.find(":");
         host = host_port.substr(0, port_separ_pos);
         if (port_separ_pos != std::string::npos) {
-            port = host_port.substr(port_separ_pos, host_port.size() - port_separ_pos);
+            port = host_port.substr(port_separ_pos + 1, host_port.size() - port_separ_pos);
 
             return {host, port};
         }
@@ -50,12 +50,9 @@ std::optional<size_t> findContentLength(std::string_view rsp) {
 
     if ((content_string_pos = rsp.find(content_string_caption)) != std::string::npos) {
         index_stop = rsp.find_first_of("\r", content_string_pos);
-        index_start =
-            content_string_pos +
-            content_string_caption
-                .size();  // make position shift to start with the content size value itself
-        content_size =
-            std::strtoul(rsp.substr(index_start, index_stop - index_start).data(), nullptr, 10);
+        index_start = content_string_pos +
+                      content_string_caption.size();  // make position shift to start with the content size value itself
+        content_size = std::strtoul(rsp.substr(index_start, index_stop - index_start).data(), nullptr, 10);
 
         return content_size;
     }

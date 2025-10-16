@@ -26,19 +26,38 @@ constexpr std::string_view delimiter = "\r\n\r\n";
 
 awaitable<void> session(tcp::socket client_socket, io_service &io_service) {
     std::string buf;
+    std::string data_buf;
 
     std::size_t n =
         co_await async_read_until(client_socket, dynamic_buffer(buf), '\n', use_awaitable);
 
     auto host_port = findHostPort(buf);
-    buf.erase(0, n);
+    buf.clear();
+
+    std::println("{} {}", n, buf);
 
     boost::asio::ip::tcp::resolver resolver(io_service);
     auto const endpoints = resolver.resolve(host_port.first, host_port.second);
-    co_await async_connect(client_socket, endpoints, use_awaitable);
-    n = co_await async_read_until(client_socket, dynamic_buffer(buf), '\n', use_awaitable);
+    tcp::socket remote_socket(io_service);
+    co_await async_connect(remote_socket, endpoints, use_awaitable);
+
+    n = co_await async_read_until(remote_socket, dynamic_buffer(buf), "\r\n\r\n", use_awaitable);
+    size_t read_data_buf_size = buf.size() - n;
     auto content_length = findContentLength(buf);
-    (void)content_length;
+
+    if (content_length.has_value()) {
+        data_buf = buf.substr(n, buf.size() - n);
+        data_buf.resize(content_length.value());
+
+        n = co_await boost::asio::async_read(
+            remote_socket,
+            boost::asio::buffer(data_buf.data() + read_data_buf_size,
+                                content_length.value() - read_data_buf_size),
+            use_awaitable);
+    }
+
+    co_await async_write(client_socket, boost::asio::buffer(data_buf, data_buf.size()),
+                         use_awaitable);
 }
 
 class Server {
@@ -51,6 +70,7 @@ public:
 
 private:
     void do_accept() {
+
         acceptor_.async_accept(socket_, [this](error_code ec) {
             // code here
             if (!ec) {
@@ -80,6 +100,8 @@ Cookie: sessionId=abc123\r\n\
 Content-Length: 4567\r\n\
 Authorization : Bearer token123 ";
 
+    auto var = findHostPort(st);
+    std::println("{} {}", var.first, var.second);
     auto pr = findContentLength(st);
 
     std::println("{}", pr.value());
