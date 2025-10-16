@@ -2,23 +2,17 @@
 #include <gtest/gtest.h>
 
 TEST(iterHeaders, Empty) {
-    // code here
-}
-
-TEST(iterHeaders, SkipRequestLine) {
-    // code here
-}
-
-TEST(iterHeaders, SingleHeader) {
-    // code here
-}
-
-TEST(iterHeaders, MultipleHeaders) {
-    // code here
-}
-
-TEST(iterHeaders, MultipleSameHeaders) {
-    // code here
+    std::string req = "GET / HTTP/1.0\r\nHost: Foo\r\n\r\n";
+    size_t count = 0;
+    std::string host;
+    iterHeaders(req, [&](auto n, auto v) {
+        if (n == "Host") {
+            host = v;
+        }
+        ++count;
+    });
+    ASSERT_EQ(count, 1ull);
+    ASSERT_EQ(host, "Foo");
 }
 
 TEST(findHostPort, Simple) {

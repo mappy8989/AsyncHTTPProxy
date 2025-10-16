@@ -1,5 +1,6 @@
 #include "headers.h"
 
+#include <print>
 #include <ranges>
 #include <string_view>
 
@@ -8,7 +9,16 @@ using namespace std::string_view_literals;
 using Callback = std::function<void(std::string_view, std::string_view)>;
 
 void iterHeaders(std::string_view req, Callback &&callback) {
-    // code here
+    for (auto pair : std::views::split(req, std::string_view("\r\n"))) {
+        auto sv = std::string_view(&*pair.begin(), std::ranges::distance(pair));
+        auto colon_pos = sv.find(":");
+        if (colon_pos != std::string::npos) {
+            std::string first = std::string(sv.substr(0, colon_pos));
+            std::string second = std::string(sv.substr(colon_pos + 2, sv.size() - colon_pos - 2));
+            callback(sv.substr(0, colon_pos),
+                     sv.substr(colon_pos + 2, sv.size() - colon_pos - 2));  // skip ": "
+        }
+    }
 }
 
 std::pair<std::string, std::string> findHostPort(std::string_view req) {
@@ -50,9 +60,12 @@ std::optional<size_t> findContentLength(std::string_view rsp) {
 
     if ((content_string_pos = rsp.find(content_string_caption)) != std::string::npos) {
         index_stop = rsp.find_first_of("\r", content_string_pos);
-        index_start = content_string_pos +
-                      content_string_caption.size();  // make position shift to start with the content size value itself
-        content_size = std::strtoul(rsp.substr(index_start, index_stop - index_start).data(), nullptr, 10);
+        index_start =
+            content_string_pos +
+            content_string_caption
+                .size();  // make position shift to start with the content size value itself
+        content_size =
+            std::strtoul(rsp.substr(index_start, index_stop - index_start).data(), nullptr, 10);
 
         return content_size;
     }
