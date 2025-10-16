@@ -34,8 +34,6 @@ awaitable<void> session(tcp::socket client_socket, io_service &io_service) {
     auto host_port = findHostPort(buf);
     buf.clear();
 
-    std::println("{} {}", n, buf);
-
     boost::asio::ip::tcp::resolver resolver(io_service);
     auto const endpoints = resolver.resolve(host_port.first, host_port.second);
     tcp::socket remote_socket(io_service);
@@ -91,20 +89,6 @@ private:
 };
 
 int main(int argc, char *argv[]) {
-
-    std::string st = "GET /path HTTP/1.1\r\n\
-Host: example.com:1234\r\n\
-User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64)\r\n\
-Accept: text/html,application/xhtml+xml\r\n\
-Cookie: sessionId=abc123\r\n\
-Content-Length: 4567\r\n\
-Authorization : Bearer token123 ";
-
-    auto var = findHostPort(st);
-    std::println("{} {}", var.first, var.second);
-    auto pr = findContentLength(st);
-
-    std::println("{}", pr.value());
     try {
         if (argc != 2) {
             std::cerr << "Usage: proxy_server";
