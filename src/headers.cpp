@@ -9,66 +9,56 @@ using namespace std::string_view_literals;
 using Callback = std::function<void(std::string_view, std::string_view)>;
 
 void iterHeaders(std::string_view req, Callback &&callback) {
+    int headers_counter = 0;
     for (auto pair : std::views::split(req, std::string_view("\r\n"))) {
         auto sv = std::string_view(&*pair.begin(), std::ranges::distance(pair));
         auto colon_pos = sv.find(":");
-        if (colon_pos != std::string::npos) {
-            std::string first = std::string(sv.substr(0, colon_pos));
-            std::string second = std::string(sv.substr(colon_pos + 2, sv.size() - colon_pos - 2));
+        if (colon_pos != std::string::npos && (headers_counter > 0)) {
             callback(sv.substr(0, colon_pos),
                      sv.substr(colon_pos + 2, sv.size() - colon_pos - 2));  // skip ": "
+        } else {
+            if (sv.find("HTTP/") != std::string::npos) {  // header found
+                headers_counter++;
+            }
         }
     }
 }
 
 std::pair<std::string, std::string> findHostPort(std::string_view req) {
-    const std::string host_string_caption = "Host: ";
+    const std::string host_string_caption = "Host";
     std::string host;
     std::string port;
 
-    size_t index_start = 0;
-    size_t index_stop = 0;
-    if ((index_start = req.find(host_string_caption)) == std::string::npos) {
-        return {};
-    }
-    index_stop = req.find_first_of("\r", index_start);
+    auto get_host_port = [&](std::string_view key, std::string_view value) {
+        if (key == host_string_caption) {
+            size_t port_separator_pos = value.find(":");
+            host = value.substr(0, port_separator_pos);
 
-    if (index_stop != std::string::npos) {
-        index_start += host_string_caption.size();  // we need position after "Host: "
-        std::string_view host_port = req.substr(index_start, index_stop - index_start);
-        size_t port_separ_pos = host_port.find(":");
-        host = host_port.substr(0, port_separ_pos);
-        if (port_separ_pos != std::string::npos) {
-            port = host_port.substr(port_separ_pos + 1, host_port.size() - port_separ_pos);
-
-            return {host, port};
+            if (port_separator_pos != std::string::npos) {
+                port = value.substr(port_separator_pos + 1, value.size() - port_separator_pos);
+            }
         }
+    };
 
-        return {host, ""};
-    }
+    iterHeaders(req, get_host_port);
 
-    return {};
+    return {host, port};
 }
 
 std::optional<size_t> findContentLength(std::string_view rsp) {
-    const std::string content_string_caption = "Content-Length: ";
+    const std::string content_string_caption = "Content-Length";
+    std::optional<size_t> content_len = std::nullopt;
 
-    size_t content_size = 0;
-    size_t content_string_pos = 0;
-    size_t index_start = 0;
-    size_t index_stop = 0;
+    auto get_length = [&](std::string_view key, std::string_view value) {
+        if (key == content_string_caption) {
+            size_t len = 0;
+            auto [ptr, ec] = std::from_chars(value.data(), value.data() + value.size(), len);
+            if (ec == std::errc()) {
+                content_len = len;
+            }
+        }
+    };
 
-    if ((content_string_pos = rsp.find(content_string_caption)) != std::string::npos) {
-        index_stop = rsp.find_first_of("\r", content_string_pos);
-        index_start =
-            content_string_pos +
-            content_string_caption
-                .size();  // make position shift to start with the content size value itself
-        content_size =
-            std::strtoul(rsp.substr(index_start, index_stop - index_start).data(), nullptr, 10);
-
-        return content_size;
-    }
-
-    return std::nullopt;
+    iterHeaders(rsp, get_length);
+    return content_len;
 }

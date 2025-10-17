@@ -1,7 +1,7 @@
 #include "headers.h"
 #include <gtest/gtest.h>
 
-TEST(iterHeaders, Empty) {
+TEST(iterHeaders, Simple) {
     std::string req = "GET / HTTP/1.0\r\nHost: Foo\r\n\r\n";
     size_t count = 0;
     std::string host;
@@ -13,6 +13,32 @@ TEST(iterHeaders, Empty) {
     });
     ASSERT_EQ(count, 1ull);
     ASSERT_EQ(host, "Foo");
+}
+
+TEST(iterHeaders, SkipRequestLine) {  // code here
+    size_t count = 0;
+    std::string req = "Accept: text/html,application/xhtml+xml\r\n\
+Cookie: sessionId=abc123\r\n\
+Content-Length: 4567\r\n\
+Authorization : Bearer token123";
+
+    iterHeaders(req, [&](auto n, auto v) { ++count; });
+    ASSERT_EQ(count, 0);
+}
+
+TEST(iterHeaders, MultipleHeaders) {
+    // code here
+    size_t count = 0;
+    std::string req = "GET /path HTTP/1.1\r\n\
+Host: example.com:1234\r\n\
+User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64)\r\n\
+Accept: text/html,application/xhtml+xml\r\n\
+GET /path HTTP/1.1\r\n\
+Content-Length: 4567\r\n\
+Authorization : Bearer token123 ";
+
+    iterHeaders(req, [&](auto n, auto v) { ++count; });
+    ASSERT_EQ(count, 5ull);
 }
 
 TEST(findHostPort, Simple) {

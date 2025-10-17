@@ -25,37 +25,47 @@ using boost::system::error_code;
 constexpr std::string_view delimiter = "\r\n\r\n";
 
 awaitable<void> session(tcp::socket client_socket, io_service &io_service) {
-    std::string buf;
-    std::string data_buf;
+    try {
+        std::string buf;
+        std::string data_buf;
 
-    std::size_t n =
-        co_await async_read_until(client_socket, dynamic_buffer(buf), '\n', use_awaitable);
+        std::size_t read_bytes_num =
+            co_await async_read_until(client_socket, dynamic_buffer(buf), '\n', use_awaitable);
 
-    auto host_port = findHostPort(buf);
-    buf.clear();
+        auto host_port = findHostPort(buf);
+        buf.clear();
 
-    boost::asio::ip::tcp::resolver resolver(io_service);
-    auto const endpoints = resolver.resolve(host_port.first, host_port.second);
-    tcp::socket remote_socket(io_service);
-    co_await async_connect(remote_socket, endpoints, use_awaitable);
+        boost::asio::ip::tcp::resolver resolver(io_service);
+        auto const endpoints = resolver.resolve(host_port.first, host_port.second);
+        tcp::socket remote_socket(io_service);
+        co_await async_connect(remote_socket, endpoints, use_awaitable);
 
-    n = co_await async_read_until(remote_socket, dynamic_buffer(buf), "\r\n\r\n", use_awaitable);
-    size_t read_data_buf_size = buf.size() - n;
-    auto content_length = findContentLength(buf);
+        read_bytes_num = co_await async_read_until(remote_socket, dynamic_buffer(buf), "\r\n\r\n",
+                                                   use_awaitable);
+        size_t read_data_buf_size = buf.size() - read_bytes_num;
+        auto content_length = findContentLength(buf);
 
-    if (content_length.has_value()) {
-        data_buf = buf.substr(n, buf.size() - n);
-        data_buf.resize(content_length.value());
+        if (content_length.has_value()) {
+            data_buf = buf.substr(read_bytes_num, buf.size() - read_bytes_num);
+            data_buf.resize(content_length.value());
 
-        n = co_await boost::asio::async_read(
-            remote_socket,
-            boost::asio::buffer(data_buf.data() + read_data_buf_size,
-                                content_length.value() - read_data_buf_size),
-            use_awaitable);
+            read_bytes_num = co_await boost::asio::async_read(
+                remote_socket,
+                boost::asio::buffer(data_buf.data() + read_data_buf_size,
+                                    content_length.value() - read_data_buf_size),
+                use_awaitable);
+        }
+
+        co_await async_write(client_socket, boost::asio::buffer(data_buf, data_buf.size()),
+                             use_awaitable);
+    } catch (const boost::system::system_error &e) {
+        std::cerr << "Boost.System error: " << e.what() << "\n";
+        client_socket.close();
+    } catch (const std::exception &e) {
+        std::cerr << "Exception: " << e.what() << "\n";
+    } catch (...) {
+        std::cerr << "Unknown error occurred in session coroutine\n";
     }
-
-    co_await async_write(client_socket, boost::asio::buffer(data_buf, data_buf.size()),
-                         use_awaitable);
 }
 
 class Server {
